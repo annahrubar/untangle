@@ -464,6 +464,49 @@ body {
   outline: none;
   border-width: 2px;
 }
+.task-meta-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+  user-select: none;
+}
+.tag-pill .tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.tag-pill.tag-work {
+  background: rgba(91, 123, 142, 0.1);
+  color: #5B7B8E;
+  border-color: rgba(91, 123, 142, 0.2);
+}
+.tag-pill.tag-work .tag-dot { background: #5B7B8E; }
+.tag-pill.tag-personal {
+  background: rgba(181, 128, 126, 0.1);
+  color: #B5807E;
+  border-color: rgba(181, 128, 126, 0.2);
+}
+.tag-pill.tag-personal .tag-dot { background: #B5807E; }
+.tag-pill.tag-learning {
+  background: rgba(126, 142, 105, 0.1);
+  color: #7E8E69;
+  border-color: rgba(126, 142, 105, 0.25);
+}
+.tag-pill.tag-learning .tag-dot { background: #7E8E69; }
 .preview-date-input {
   font: inherit;
   font-size: 12px;

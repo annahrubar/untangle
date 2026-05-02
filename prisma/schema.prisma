@@ -15,6 +15,7 @@ model Task {
   rawInput  String
   title     String
   priority  String    // "high" | "medium" | "low"
+  tag       String?   // "work" | "personal" | "learning" | null
   deadline  DateTime?
   done      Boolean   @default(false)
   parentId  String?

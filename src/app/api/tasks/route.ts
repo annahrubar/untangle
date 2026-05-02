@@ -34,6 +34,7 @@ export async function POST(req: Request) {
           rawInput,
           title: t.title,
           priority: t.priority,
+          tag: t.tag ?? null,
           deadline: t.deadline ? new Date(t.deadline + "T00:00:00.000Z") : null,
         },
       });
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
               rawInput,
               title: s.title,
               priority: s.priority,
+              tag: s.tag ?? t.tag ?? null,
               deadline: s.deadline
                 ? new Date(s.deadline + "T00:00:00.000Z")
                 : parent.deadline,

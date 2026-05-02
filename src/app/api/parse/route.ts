@@ -16,6 +16,7 @@ Decide which structure fits and return a JSON object with this exact shape:
     {
       "title": "Short imperative task name (5-8 words max)",
       "priority": "high" | "medium" | "low",
+      "tag": "work" | "personal" | "learning" | null,
       "deadline": "YYYY-MM-DD" | null,
       "subtasks": [ { same shape, no nested subtasks } ]
     }
@@ -34,6 +35,12 @@ Rules:
 - IMPORTANT: keep the title in the SAME language as the user's input. Never translate. If the user wrote in Ukrainian, the title is in Ukrainian. If in English — English. If mixed — match the dominant language of the task itself.
 - Never invent tasks not present in the text.
 - Subtasks (if any) inherit the parent's deadline unless they have their own.
+- Classify each task into ONE tag:
+  - "work" — professional tasks, emails to colleagues, deliverables, meetings, projects, reports
+  - "personal" — family, friends, errands, gifts, health, home, social, finances, shopping
+  - "learning" — reading, courses, skill-building, research, books, tutorials
+  - null — only if it truly doesn't fit any of the above
+- Subtasks inherit the parent's tag.
 
 Return ONLY the JSON object, no markdown fences, no commentary.`;
 

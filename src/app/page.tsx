@@ -12,7 +12,7 @@ import {
   HistoryIcon,
   SunriseIcon,
 } from "@/components/Icons";
-import type { Task, ParsedTask, Priority, RecommendItem } from "@/lib/types";
+import type { Task, ParsedTask, Priority, Tag, RecommendItem } from "@/lib/types";
 
 type Filter = "all" | "active" | "done";
 type SortBy = "recent" | "deadline" | "priority";
@@ -56,6 +56,7 @@ function formatDeadline(iso: string | null): string | null {
 type SelectableTask = {
   title: string;
   priority: Priority;
+  tag: Tag | null;
   deadline: string | null;
   selected: boolean;
   subtasks?: SelectableTask[];
@@ -163,6 +164,7 @@ export default function Home() {
               selected: enriched.map((t) => ({
                 title: t.title,
                 priority: t.priority,
+                tag: t.tag,
                 deadline: t.deadline,
                 subtasks: [],
               })),
@@ -187,11 +189,13 @@ export default function Home() {
         const tasksWithSelected: SelectableTask[] = enriched.map((t) => ({
           title: t.title,
           priority: t.priority,
+          tag: t.tag,
           deadline: t.deadline,
           selected: true,
           subtasks: (t.subtasks ?? []).map((s) => ({
             title: s.title,
             priority: s.priority,
+            tag: s.tag ?? t.tag,
             deadline: s.deadline,
             selected: true,
           })),
@@ -249,6 +253,7 @@ export default function Home() {
       .map((t) => ({
         title: t.title,
         priority: t.priority,
+        tag: t.tag,
         deadline: t.deadline,
         subtasks: [],
       }));
@@ -278,12 +283,14 @@ export default function Home() {
       .map((t) => ({
         title: t.title,
         priority: t.priority,
+        tag: t.tag,
         deadline: t.deadline,
         subtasks: (t.subtasks ?? [])
           .filter((s) => s.selected)
           .map((s) => ({
             title: s.title,
             priority: s.priority,
+            tag: s.tag ?? t.tag,
             deadline: s.deadline,
           })),
       }));
@@ -903,6 +910,13 @@ function TaskRow({
             {task.title}
           </div>
         )}
+        <div className="task-meta-row">
+        {task.tag && (
+          <span className={`tag-pill tag-${task.tag}`}>
+            <span className="tag-dot" />
+            {task.tag}
+          </span>
+        )}
         {isEditingDeadline ? (
           <input
             type="date"
@@ -933,6 +947,7 @@ function TaskRow({
             <span>Add date</span>
           </button>
         )}
+        </div>
       </div>
       <button
         className="task-delete"
