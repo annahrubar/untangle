@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getOpenAI, MODEL } from "@/lib/openai";
 import type { RecommendItem } from "@/lib/types";
 
-const SYSTEM_PROMPT = `You are a calm, supportive coach helping someone choose what to do in the next 2 hours.
+const COACH_PROMPT = `You are a calm, supportive coach helping someone choose what to do in the next 2 hours.
 
 Given a list of active tasks (with priority and deadline), pick the TOP 3 to do right now and explain WHY for each.
 
@@ -24,20 +24,56 @@ Rules for the "why" field:
 - Be warm but direct. Like a thoughtful friend, not a productivity guru.
 - NEVER say generic things like "high priority" or "urgent task" alone — explain WHAT makes it the right choice now.
 - Each "why" must be 1-2 sentences max.
-- Examples of good "why":
-  - "Deadline is tomorrow morning, and it's a quick text — knock it out before it slips."
-  - "It needs focus, and you have a clear two-hour window. Block it now."
-  - "Lighter lift. Pair it with a coffee."
 
 If there are fewer than 3 active tasks, return only as many as exist.
 If there are no active tasks, return { "items": [] }.
+
+IMPORTANT: write each "why" in the SAME language as the corresponding task title.
 
 Today is ${new Date().toISOString().slice(0, 10)} and the current time is ${new Date().toTimeString().slice(0, 5)}.
 
 Return ONLY the JSON, no markdown fences.`;
 
-export async function POST() {
+const TODAY_PROMPT = `You are a calm planner helping someone shape their day.
+
+Given a list of active tasks (with priority and deadline), build TODAY'S realistic plan:
+- Pick the tasks that should be done TODAY (deadline today, overdue, urgent, or quick wins worth knocking out).
+- Up to 5 tasks. Order them: morning-energy items first (focus work), lighter ones later.
+- For each, write a short "why" explaining the slot/order.
+
+Return JSON in this exact shape:
+
+{
+  "items": [
+    {
+      "id": "task-id-from-input",
+      "title": "Same title as the task",
+      "why": "1-2 sentences placing it in the day"
+    }
+  ]
+}
+
+Rules:
+- "why" examples: "Start with this — deadline is today and you'll feel lighter after." / "Save for after lunch — quick and doesn't need deep focus."
+- If nothing is due today and nothing is overdue, return up to 3 tasks the user should chip away at to stay ahead.
+- If there are no active tasks, return { "items": [] }.
+
+IMPORTANT: write each "why" in the SAME language as the corresponding task title.
+
+Today is ${new Date().toISOString().slice(0, 10)} and the current time is ${new Date().toTimeString().slice(0, 5)}.
+
+Return ONLY the JSON, no markdown fences.`;
+
+export async function POST(req: Request) {
   try {
+    let mode: "coach" | "today" = "coach";
+    try {
+      const body = await req.json();
+      if (body?.mode === "today") mode = "today";
+    } catch {
+      // empty body — default to coach
+    }
+
     const tasks = await prisma.task.findMany({
       where: { done: false },
       orderBy: { createdAt: "desc" },
@@ -54,10 +90,11 @@ export async function POST() {
       deadline: t.deadline ? t.deadline.toISOString().slice(0, 10) : null,
     }));
 
+    const systemPrompt = mode === "today" ? TODAY_PROMPT : COACH_PROMPT;
     const completion = await getOpenAI().chat.completions.create({
       model: MODEL,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: JSON.stringify({ tasks: compactTasks }) },
       ],
       response_format: { type: "json_object" },
@@ -66,8 +103,9 @@ export async function POST() {
 
     const raw = completion.choices[0]?.message?.content ?? '{"items":[]}';
     const parsed = JSON.parse(raw);
+    const limit = mode === "today" ? 5 : 3;
     const items: RecommendItem[] = Array.isArray(parsed.items)
-      ? parsed.items.slice(0, 3)
+      ? parsed.items.slice(0, limit)
       : [];
 
     return NextResponse.json({ items });

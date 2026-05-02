@@ -1,21 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   KnotIcon,
   ClockIcon,
   CheckIcon,
-  SparkIcon,
   TangleIcon,
   TrashIcon,
   CalendarIcon,
   FlagIcon,
   HistoryIcon,
+  SunriseIcon,
 } from "@/components/Icons";
 import type { Task, ParsedTask, Priority, RecommendItem } from "@/lib/types";
 
 type Filter = "all" | "active" | "done";
 type SortBy = "recent" | "deadline" | "priority";
+
+function isoToDateInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
 
 function formatDeadline(iso: string | null): string | null {
   if (!iso) return null;
@@ -65,12 +72,37 @@ export default function Home() {
   const [sortBy, setSortBy] = useState<SortBy>("recent");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [deadlineEditingId, setDeadlineEditingId] = useState<string | null>(null);
+  const quickDeadlineRef = useRef<HTMLInputElement>(null);
+
+  function openQuickDeadline() {
+    const el = quickDeadlineRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        // fall through
+      }
+    }
+    el.focus();
+    el.click();
+  }
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
+  const [quickDeadline, setQuickDeadline] = useState("");
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [coachOpen, setCoachOpen] = useState(false);
   const [coachItems, setCoachItems] = useState<RecommendItem[] | null>(null);
   const [coachLoading, setCoachLoading] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // Initial load
   useEffect(() => {
@@ -92,6 +124,8 @@ export default function Home() {
   function untangle() {
     if (!text.trim() || busy) return;
     setBusy(true);
+    const rawInput = text;
+    const fallbackDate = quickDeadline || null;
     fetch("/api/parse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,20 +133,73 @@ export default function Home() {
     })
       .then((r) => r.json())
       .then((d) => {
-        if (Array.isArray(d.tasks)) {
-          const tasksWithSelected = d.tasks.map((t: ParsedTask) => ({
-            ...t,
-            selected: true,
-            subtasks: (t.subtasks ?? []).map((s) => ({
-              ...s,
-              selected: true,
-            })),
-          }));
-          setPreview({ rawInput: text, tasks: tasksWithSelected });
+        if (!Array.isArray(d.tasks) || d.tasks.length === 0) {
+          setBusy(false);
+          return;
         }
+        // Apply quickDeadline as fallback wherever AI didn't set one
+        const enriched: ParsedTask[] = d.tasks.map((t: ParsedTask) => ({
+          ...t,
+          deadline: t.deadline ?? fallbackDate,
+          subtasks: (t.subtasks ?? []).map((s) => ({
+            ...s,
+            deadline: s.deadline ?? fallbackDate,
+          })),
+        }));
+
+        const totalSubtasks = enriched.reduce(
+          (acc, t) => acc + (t.subtasks?.length ?? 0),
+          0
+        );
+        const isSingle = enriched.length === 1 && totalSubtasks === 0;
+
+        if (isSingle) {
+          // Auto-save: skip preview
+          fetch("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              rawInput,
+              selected: enriched.map((t) => ({
+                title: t.title,
+                priority: t.priority,
+                deadline: t.deadline,
+                subtasks: [],
+              })),
+            }),
+          })
+            .then((r) => r.json())
+            .then((res) => {
+              if (Array.isArray(res.tasks)) {
+                setTasks((cur) => [...res.tasks, ...cur]);
+                const savedTitle = res.tasks[0]?.title ?? "Task";
+                setToast(`Saved · ${savedTitle}`);
+              }
+              setText("");
+              setQuickDeadline("");
+            })
+            .catch(() => {})
+            .finally(() => setBusy(false));
+          return;
+        }
+
+        // Multiple tasks or has subtasks → show preview
+        const tasksWithSelected: SelectableTask[] = enriched.map((t) => ({
+          title: t.title,
+          priority: t.priority,
+          deadline: t.deadline,
+          selected: true,
+          subtasks: (t.subtasks ?? []).map((s) => ({
+            title: s.title,
+            priority: s.priority,
+            deadline: s.deadline,
+            selected: true,
+          })),
+        }));
+        setPreview({ rawInput, tasks: tasksWithSelected });
+        setBusy(false);
       })
-      .catch(() => {})
-      .finally(() => setBusy(false));
+      .catch(() => setBusy(false));
   }
 
   function togglePreviewParent(i: number) {
@@ -135,9 +222,53 @@ export default function Home() {
     setPreview({ ...preview, tasks: next });
   }
 
+  function setPreviewDeadline(i: number, j: number | null, isoDate: string) {
+    if (!preview) return;
+    const next = [...preview.tasks];
+    const value = isoDate || null;
+    if (j === null) {
+      next[i] = { ...next[i], deadline: value };
+    } else {
+      const subs = [...(next[i].subtasks ?? [])];
+      subs[j] = { ...subs[j], deadline: value };
+      next[i] = { ...next[i], subtasks: subs };
+    }
+    setPreview({ ...preview, tasks: next });
+  }
+
   function discardPreview() {
     setPreview(null);
     setText("");
+    setQuickDeadline("");
+  }
+
+  function savePreviewFlat() {
+    if (!preview) return;
+    const selected = preview.tasks
+      .filter((t) => t.selected)
+      .map((t) => ({
+        title: t.title,
+        priority: t.priority,
+        deadline: t.deadline,
+        subtasks: [],
+      }));
+    if (selected.length === 0) {
+      discardPreview();
+      return;
+    }
+    fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rawInput: preview.rawInput, selected }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.tasks)) {
+          setTasks((cur) => [...d.tasks, ...cur]);
+        }
+        discardPreview();
+      })
+      .catch(() => {});
   }
 
   function savePreview() {
@@ -220,6 +351,33 @@ export default function Home() {
     setEditText(task.title);
   }
 
+  function saveDeadline(id: string, isoDate: string) {
+    setDeadlineEditingId(null);
+    const payload = isoDate ? { deadline: isoDate } : { deadline: null };
+    const newDeadlineIso = isoDate
+      ? new Date(isoDate + "T00:00:00.000Z").toISOString()
+      : null;
+    fetch(`/api/tasks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(() => {
+        setTasks((cur) =>
+          cur.map((t) => {
+            if (t.id === id) return { ...t, deadline: newDeadlineIso };
+            return {
+              ...t,
+              subtasks: t.subtasks?.map((s) =>
+                s.id === id ? { ...s, deadline: newDeadlineIso } : s
+              ),
+            };
+          })
+        );
+      })
+      .catch(() => {});
+  }
+
   function saveEdit(id: string) {
     const newTitle = editText.trim();
     setEditingId(null);
@@ -245,10 +403,14 @@ export default function Home() {
       .catch(() => {});
   }
 
-  function openCoach() {
+  function openCoach(_mode: "today" = "today") {
     setCoachOpen(true);
     setCoachLoading(true);
-    fetch("/api/recommend", { method: "POST" })
+    fetch("/api/recommend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "today" }),
+    })
       .then((r) => r.json())
       .then((d) => setCoachItems(d.items ?? []))
       .catch(() => setCoachItems([]))
@@ -307,6 +469,20 @@ export default function Home() {
       <main className="page">
         {/* Hero */}
         <section className="hero">
+          <div className="hero-chips">
+            <span className="hero-chip">
+              <span className="hero-chip-emoji">⚡</span>
+              Spots what&apos;s urgent
+            </span>
+            <span className="hero-chip">
+              <span className="hero-chip-emoji">📅</span>
+              Catches deadlines
+            </span>
+            <span className="hero-chip">
+              <span className="hero-chip-emoji">🪢</span>
+              Untangles the big stuff
+            </span>
+          </div>
           <h1>Brain-dump in. Plan out.</h1>
           <p>Type like you&apos;d text a friend. We turn the chaos into a clean list.</p>
         </section>
@@ -330,20 +506,56 @@ export default function Home() {
           />
           <div className="dump-actions">
             <span className="dump-hint">⌘ + Enter to untangle</span>
-            <button
-              className="btn"
-              onClick={untangle}
-              disabled={busy || !text.trim()}
-            >
-              {busy ? (
-                <>
-                  <span className="spin" />
-                  Untangling…
-                </>
-              ) : (
-                <>Untangle</>
+            <div className="dump-controls">
+              <button
+                type="button"
+                className={`quick-deadline ${quickDeadline ? "set" : ""}`}
+                onClick={openQuickDeadline}
+                title="Set a deadline for tasks where AI didn't find one"
+              >
+                <CalendarIcon />
+                <span>
+                  {quickDeadline
+                    ? formatDeadline(
+                        new Date(quickDeadline + "T00:00:00.000Z").toISOString()
+                      )
+                    : "Date"}
+                </span>
+              </button>
+              <input
+                ref={quickDeadlineRef}
+                type="date"
+                value={quickDeadline}
+                onChange={(e) => setQuickDeadline(e.target.value)}
+                className="quick-deadline-native"
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+              {quickDeadline && (
+                <button
+                  type="button"
+                  className="quick-deadline-clear"
+                  onClick={() => setQuickDeadline("")}
+                  aria-label="Clear date"
+                >
+                  ×
+                </button>
               )}
-            </button>
+              <button
+                className="btn"
+                onClick={untangle}
+                disabled={busy || !text.trim()}
+              >
+                {busy ? (
+                  <>
+                    <span className="spin" />
+                    Untangling…
+                  </>
+                ) : (
+                  <>Untangle</>
+                )}
+              </button>
+            </div>
           </div>
           {busy && (
             <div className="untangling">
@@ -354,13 +566,27 @@ export default function Home() {
         </div>
 
         {/* Preview block */}
-        {preview && (
+        {preview && (() => {
+          const hasSubtasks = preview.tasks.some(
+            (t) => (t.subtasks?.length ?? 0) > 0
+          );
+          const isSingleParentWithSubs =
+            preview.tasks.length === 1 &&
+            (preview.tasks[0].subtasks?.length ?? 0) > 0;
+          const subtaskCount = preview.tasks[0]?.subtasks?.length ?? 0;
+          let title: string;
+          if (isSingleParentWithSubs) {
+            title = `We broke this into ${subtaskCount} steps. Keep it as a tree, or save as one task?`;
+          } else if (hasSubtasks) {
+            title = `Found ${preview.tasks.length} tasks (some with sub-steps). Pick what to keep.`;
+          } else if (preview.tasks.length === 1) {
+            title = "Found 1 thing. Save it?";
+          } else {
+            title = `Found ${preview.tasks.length} things. Pick what to keep.`;
+          }
+          return (
           <div className="preview">
-            <h3 className="preview-title">
-              {preview.tasks.length === 1
-                ? "Found 1 thing. Save it?"
-                : `Found ${preview.tasks.length} things. Pick what to keep.`}
-            </h3>
+            <h3 className="preview-title">{title}</h3>
             <div className="preview-list">
               {preview.tasks.map((t, i) => (
                 <div key={i}>
@@ -375,7 +601,14 @@ export default function Home() {
                     <div className="preview-text">
                       {t.title}
                       <div className="preview-text-meta">
-                        {t.priority} · {t.deadline ? formatDeadline(t.deadline) : "no deadline"}
+                        <span>{t.priority}</span>
+                        <span>·</span>
+                        <input
+                          type="date"
+                          className="preview-date-input"
+                          value={isoToDateInput(t.deadline)}
+                          onChange={(e) => setPreviewDeadline(i, null, e.target.value)}
+                        />
                       </div>
                     </div>
                   </div>
@@ -392,7 +625,14 @@ export default function Home() {
                       <div className="preview-text">
                         {s.title}
                         <div className="preview-text-meta">
-                          {s.priority} · {s.deadline ? formatDeadline(s.deadline) : "inherits parent"}
+                          <span>{s.priority}</span>
+                          <span>·</span>
+                          <input
+                            type="date"
+                            className="preview-date-input"
+                            value={isoToDateInput(s.deadline)}
+                            onChange={(e) => setPreviewDeadline(i, j, e.target.value)}
+                          />
                         </div>
                       </div>
                     </div>
@@ -404,12 +644,24 @@ export default function Home() {
               <button className="btn-ghost" onClick={discardPreview}>
                 Discard
               </button>
-              <button className="btn" onClick={savePreview}>
-                Save selected
-              </button>
+              {hasSubtasks ? (
+                <>
+                  <button className="btn-ghost" onClick={savePreviewFlat}>
+                    Save as one task
+                  </button>
+                  <button className="btn" onClick={savePreview}>
+                    Save with subtasks
+                  </button>
+                </>
+              ) : (
+                <button className="btn" onClick={savePreview}>
+                  Save selected
+                </button>
+              )}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Tasks section */}
         <section className="tasks-section">
@@ -452,11 +704,25 @@ export default function Home() {
           </div>
 
           {sorted.length === 0 ? (
-            <div className="empty">
-              <TangleIcon style={{ color: "var(--muted)" }} />
-              <h3>Nothing on your mind yet</h3>
-              <p>Drop your first thought above.</p>
-            </div>
+            counts.all === 0 ? (
+              <div className="empty">
+                <TangleIcon style={{ color: "var(--muted)" }} />
+                <h3>Nothing on your mind yet</h3>
+                <p>Drop your first thought above.</p>
+              </div>
+            ) : filter === "active" && counts.active === 0 ? (
+              <div className="empty empty-celebrate">
+                <span className="empty-emoji" aria-hidden="true">🎉</span>
+                <h3>All done!</h3>
+                <p>Your list is clear. Take a breath — or drop a new thought.</p>
+              </div>
+            ) : (
+              <div className="empty">
+                <CheckIcon style={{ color: "var(--muted)", width: 28, height: 28 }} />
+                <h3>Nothing checked off yet</h3>
+                <p>Switch to <strong>Active</strong> to see what&apos;s on your plate.</p>
+              </div>
+            )
           ) : (
             <div className="tasks-list">
               {sorted.map((t) => (
@@ -471,6 +737,9 @@ export default function Home() {
                   startEdit={startEdit}
                   saveEdit={saveEdit}
                   cancelEdit={() => setEditingId(null)}
+                  deadlineEditingId={deadlineEditingId}
+                  setDeadlineEditingId={setDeadlineEditingId}
+                  saveDeadline={saveDeadline}
                 />
               ))}
             </div>
@@ -478,12 +747,24 @@ export default function Home() {
         </section>
       </main>
 
+      {/* Toast */}
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">
+          <CheckIcon />
+          <span>{toast}</span>
+        </div>
+      )}
+
       {/* FAB */}
-      <button className="fab" onClick={openCoach} aria-label="What should I do now?">
+      <button
+        className="fab"
+        onClick={() => openCoach("today")}
+        aria-label="What's on for today?"
+      >
         <span className="spark">
-          <SparkIcon />
+          <SunriseIcon />
         </span>
-        <span className="fab-label">What should I do now?</span>
+        <span className="fab-label">What&apos;s on today?</span>
       </button>
 
       {/* Coach overlay */}
@@ -495,10 +776,10 @@ export default function Home() {
             role="dialog"
             aria-modal="true"
           >
-            <div className="coach-eyebrow">Next 2 hours</div>
-            <h3>Here&apos;s what I&apos;d do.</h3>
+            <div className="coach-eyebrow">Today</div>
+            <h3>Your day, sketched.</h3>
             <p className="coach-sub">
-              Three small moves. You don&apos;t have to do them all.
+              A few moves to shape today. Adjust as you go.
             </p>
             {coachLoading ? (
               <div style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
@@ -555,6 +836,9 @@ type RowSharedProps = {
   startEdit: (task: Task) => void;
   saveEdit: (id: string) => void;
   cancelEdit: () => void;
+  deadlineEditingId: string | null;
+  setDeadlineEditingId: (id: string | null) => void;
+  saveDeadline: (id: string, isoDate: string) => void;
 };
 
 function TaskRowGroup({
@@ -582,6 +866,9 @@ function TaskRow({
   startEdit,
   saveEdit,
   cancelEdit,
+  deadlineEditingId,
+  setDeadlineEditingId,
+  saveDeadline,
 }: { task: Task; isSubtask?: boolean } & RowSharedProps) {
   const dotCls = task.priority as Priority;
   const isOverdue =
@@ -589,6 +876,7 @@ function TaskRow({
     !task.done &&
     new Date(task.deadline).getTime() < new Date().setHours(0, 0, 0, 0);
   const isEditing = editingId === task.id;
+  const isEditingDeadline = deadlineEditingId === task.id;
   const cls = `task ${task.done ? "done" : ""} ${isSubtask ? "subtask" : ""} ${isOverdue ? "overdue" : ""}`;
   const deadline = formatDeadline(task.deadline);
   return (
@@ -615,15 +903,35 @@ function TaskRow({
             {task.title}
           </div>
         )}
-        {deadline ? (
-          <div className="task-meta">
+        {isEditingDeadline ? (
+          <input
+            type="date"
+            autoFocus
+            className="deadline-input"
+            defaultValue={isoToDateInput(task.deadline)}
+            onChange={(e) => saveDeadline(task.id, e.target.value)}
+            onBlur={() => setDeadlineEditingId(null)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setDeadlineEditingId(null);
+            }}
+          />
+        ) : deadline ? (
+          <button
+            className="task-meta deadline-pill"
+            onClick={() => setDeadlineEditingId(task.id)}
+            title="Click to change deadline"
+          >
             <ClockIcon />
             <span>{deadline}</span>
-          </div>
+          </button>
         ) : (
-          <div className="task-meta" style={{ opacity: 0.7 }}>
-            No deadline
-          </div>
+          <button
+            className="deadline-add"
+            onClick={() => setDeadlineEditingId(task.id)}
+          >
+            <CalendarIcon />
+            <span>Add date</span>
+          </button>
         )}
       </div>
       <button

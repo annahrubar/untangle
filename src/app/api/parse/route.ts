@@ -31,6 +31,7 @@ Rules:
 - Deadline is date-only ISO format (YYYY-MM-DD) — no time. Today is ${new Date().toISOString().slice(0, 10)}.
 - "tomorrow" means tomorrow's date. "Friday" means the next Friday. If no time/date hint at all, deadline is null.
 - Title should be a clean, polished imperative form (capitalize first letter, no trailing punctuation).
+- IMPORTANT: keep the title in the SAME language as the user's input. Never translate. If the user wrote in Ukrainian, the title is in Ukrainian. If in English — English. If mixed — match the dominant language of the task itself.
 - Never invent tasks not present in the text.
 - Subtasks (if any) inherit the parent's deadline unless they have their own.
 

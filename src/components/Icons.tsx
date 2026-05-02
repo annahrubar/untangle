@@ -152,6 +152,30 @@ export function FlagIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function SunriseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M3 18h18" />
+      <path d="M5 18a7 7 0 0 1 14 0" />
+      <path d="M12 4v3" />
+      <path d="M5 9l1.5 1.5" />
+      <path d="M19 9l-1.5 1.5" />
+      <path d="M2 14h2" />
+      <path d="M20 14h2" />
+    </svg>
+  );
+}
+
 export function HistoryIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
