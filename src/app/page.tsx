@@ -8,10 +8,14 @@ import {
   SparkIcon,
   TangleIcon,
   TrashIcon,
+  CalendarIcon,
+  FlagIcon,
+  HistoryIcon,
 } from "@/components/Icons";
 import type { Task, ParsedTask, Priority, RecommendItem } from "@/lib/types";
 
 type Filter = "all" | "active" | "done";
+type SortBy = "recent" | "deadline" | "priority";
 
 function formatDeadline(iso: string | null): string | null {
   if (!iso) return null;
@@ -58,6 +62,9 @@ type PreviewState = {
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
+  const [sortBy, setSortBy] = useState<SortBy>("recent");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -208,6 +215,36 @@ export default function Home() {
       .catch(() => {});
   }
 
+  function startEdit(task: Task) {
+    setEditingId(task.id);
+    setEditText(task.title);
+  }
+
+  function saveEdit(id: string) {
+    const newTitle = editText.trim();
+    setEditingId(null);
+    if (!newTitle) return;
+    fetch(`/api/tasks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newTitle }),
+    })
+      .then(() => {
+        setTasks((cur) =>
+          cur.map((t) => {
+            if (t.id === id) return { ...t, title: newTitle };
+            return {
+              ...t,
+              subtasks: t.subtasks?.map((s) =>
+                s.id === id ? { ...s, title: newTitle } : s
+              ),
+            };
+          })
+        );
+      })
+      .catch(() => {});
+  }
+
   function openCoach() {
     setCoachOpen(true);
     setCoachLoading(true);
@@ -236,6 +273,22 @@ export default function Home() {
       }));
   }, [tasks, filter]);
 
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    if (sortBy === "deadline") {
+      list.sort((a, b) => {
+        if (!a.deadline && !b.deadline) return 0;
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      });
+    } else if (sortBy === "priority") {
+      const order: Record<Priority, number> = { high: 3, medium: 2, low: 1 };
+      list.sort((a, b) => order[b.priority] - order[a.priority]);
+    }
+    return list;
+  }, [filtered, sortBy]);
+
   return (
     <>
       {/* Top bar */}
@@ -254,19 +307,19 @@ export default function Home() {
       <main className="page">
         {/* Hero */}
         <section className="hero">
-          <h1>What&apos;s on your mind?</h1>
-          <p>Drop your thoughts. We&apos;ll sort them.</p>
+          <h1>Brain-dump in. Plan out.</h1>
+          <p>Type like you&apos;d text a friend. We turn the chaos into a clean list.</p>
         </section>
 
         {/* Brain-dump input */}
         <div className="dump-wrap">
           <textarea
             className="dump"
-            placeholder="Tomorrow text Slava about the video before lunch, urgent. Also need to finalize Q2 plan by Friday. And buy birthday gift for mom."
+            placeholder="Type whatever's on your mind..."
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.isComposing) return;
+              if (e.nativeEvent.isComposing) return;
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                 e.preventDefault();
                 untangle();
@@ -362,6 +415,7 @@ export default function Home() {
         <section className="tasks-section">
           <div className="tasks-head">
             <h2>Your tasks</h2>
+            <div className="tasks-controls">
             <div className="filters" role="tablist">
               {(["all", "active", "done"] as Filter[]).map((f, idx) => (
                 <span key={f} style={{ display: "inline-flex", alignItems: "center" }}>
@@ -380,9 +434,24 @@ export default function Home() {
                 </span>
               ))}
             </div>
+            <div className="sort-row">
+              <span className="sort-label">Sort</span>
+              {(["recent", "deadline", "priority"] as SortBy[]).map((s) => (
+                <button
+                  key={s}
+                  className={`sort-pill ${sortBy === s ? "active" : ""}`}
+                  onClick={() => setSortBy(s)}
+                  title={s === "recent" ? "Most recent first" : s === "deadline" ? "Closest deadline first" : "Highest priority first"}
+                >
+                  {s === "recent" ? <HistoryIcon /> : s === "deadline" ? <CalendarIcon /> : <FlagIcon />}
+                  <span>{s === "recent" ? "Recent" : s === "deadline" ? "Deadline" : "Priority"}</span>
+                </button>
+              ))}
+            </div>
+            </div>
           </div>
 
-          {filtered.length === 0 ? (
+          {sorted.length === 0 ? (
             <div className="empty">
               <TangleIcon style={{ color: "var(--muted)" }} />
               <h3>Nothing on your mind yet</h3>
@@ -390,12 +459,18 @@ export default function Home() {
             </div>
           ) : (
             <div className="tasks-list">
-              {filtered.map((t) => (
+              {sorted.map((t) => (
                 <TaskRowGroup
                   key={t.id}
                   task={t}
                   onToggle={toggleDone}
                   onDelete={deleteTask}
+                  editingId={editingId}
+                  editText={editText}
+                  setEditText={setEditText}
+                  startEdit={startEdit}
+                  saveEdit={saveEdit}
+                  cancelEdit={() => setEditingId(null)}
                 />
               ))}
             </div>
@@ -471,26 +546,26 @@ export default function Home() {
   );
 }
 
-function TaskRowGroup({
-  task,
-  onToggle,
-  onDelete,
-}: {
-  task: Task;
+type RowSharedProps = {
   onToggle: (id: string, currentDone: boolean) => void;
   onDelete: (id: string) => void;
-}) {
+  editingId: string | null;
+  editText: string;
+  setEditText: (s: string) => void;
+  startEdit: (task: Task) => void;
+  saveEdit: (id: string) => void;
+  cancelEdit: () => void;
+};
+
+function TaskRowGroup({
+  task,
+  ...shared
+}: { task: Task } & RowSharedProps) {
   return (
     <>
-      <TaskRow task={task} onToggle={onToggle} onDelete={onDelete} />
+      <TaskRow task={task} {...shared} />
       {task.subtasks?.map((s) => (
-        <TaskRow
-          key={s.id}
-          task={s}
-          isSubtask
-          onToggle={onToggle}
-          onDelete={onDelete}
-        />
+        <TaskRow key={s.id} task={s} isSubtask {...shared} />
       ))}
     </>
   );
@@ -501,20 +576,45 @@ function TaskRow({
   isSubtask = false,
   onToggle,
   onDelete,
-}: {
-  task: Task;
-  isSubtask?: boolean;
-  onToggle: (id: string, currentDone: boolean) => void;
-  onDelete: (id: string) => void;
-}) {
+  editingId,
+  editText,
+  setEditText,
+  startEdit,
+  saveEdit,
+  cancelEdit,
+}: { task: Task; isSubtask?: boolean } & RowSharedProps) {
   const dotCls = task.priority as Priority;
-  const cls = `task ${task.done ? "done" : ""} ${isSubtask ? "subtask" : ""}`;
+  const isOverdue =
+    !!task.deadline &&
+    !task.done &&
+    new Date(task.deadline).getTime() < new Date().setHours(0, 0, 0, 0);
+  const isEditing = editingId === task.id;
+  const cls = `task ${task.done ? "done" : ""} ${isSubtask ? "subtask" : ""} ${isOverdue ? "overdue" : ""}`;
   const deadline = formatDeadline(task.deadline);
   return (
     <div className={cls}>
       <span className={`dot ${dotCls}`} aria-label={`${task.priority} priority`} />
       <div className="task-body">
-        <div className="task-title">{task.title}</div>
+        {isEditing ? (
+          <input
+            autoFocus
+            className="task-title-input"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onBlur={() => saveEdit(task.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                saveEdit(task.id);
+              }
+              if (e.key === "Escape") cancelEdit();
+            }}
+          />
+        ) : (
+          <div className="task-title" onClick={() => startEdit(task)}>
+            {task.title}
+          </div>
+        )}
         {deadline ? (
           <div className="task-meta">
             <ClockIcon />
