@@ -1,0 +1,27 @@
+// Untangle — Prisma schema
+// Single Task model with self-relation for sub-tasks.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Task {
+  id        String    @id @default(cuid())
+  rawInput  String
+  title     String
+  priority  String    // "high" | "medium" | "low"
+  deadline  DateTime?
+  done      Boolean   @default(false)
+  parentId  String?
+  parent    Task?     @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks  Task[]    @relation("Subtasks")
+  createdAt DateTime  @default(now())
+
+  @@index([parentId])
+  @@index([done])
+}

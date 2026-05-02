@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>untangle — dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #FAF8F3;
+    --surface: #FFFEFB;
+    --text: #3A3530;
+    --muted: #8A8278;
+    --accent: #C97B5C;
+    --accent-deep: #B86E50;
+    --hi: #D75441;
+    --med: #D9A646;
+    --lo: #8AA876;
+    --border: #E8E2D8;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+    --shadow-card-hover: 0 2px 8px rgba(58,53,48,0.06);
+    --shadow-fab: 0 4px 16px rgba(201,123,92,0.25);
+    --shadow-fab-hover: 0 6px 22px rgba(201,123,92,0.32);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-feature-settings: "ss01","cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body { min-height: 100vh; }
+
+  /* Top bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(250,248,243,0.86);
+    backdrop-filter: saturate(140%) blur(10px);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-inner {
+    max-width: 1200px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 600; font-size: 18px; color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 999px;
+    background: linear-gradient(135deg, #E8DDC9, #C9B89A);
+    border: 1px solid var(--border);
+    display: grid; place-items: center;
+    color: #6B5E48; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  /* Layout */
+  .page {
+    max-width: 1200px; margin: 0 auto;
+    padding: 0 32px 160px;
+  }
+
+  /* Hero */
+  .hero { padding: 64px 0 32px; }
+  .hero h1 {
+    margin: 0;
+    font-size: 48px; line-height: 1.05; letter-spacing: -0.025em;
+    font-weight: 600; color: var(--text);
+  }
+  .hero p {
+    margin: 12px 0 0;
+    font-size: 18px; color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* Brain-dump */
+  .dump-wrap { margin-top: 24px; }
+  .dump {
+    width: 100%;
+    min-height: 120px; max-height: 300px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    font: inherit; font-size: 16px; line-height: 1.55;
+    color: var(--text);
+    resize: vertical;
+    outline: none;
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+    box-shadow: var(--shadow-sm);
+  }
+  .dump::placeholder {
+    color: var(--muted); font-style: italic;
+  }
+  .dump:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(201,123,92,0.10);
+  }
+  .dump-actions {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 16px; gap: 16px;
+  }
+  .dump-hint {
+    font-size: 13px; color: var(--muted);
+  }
+  .btn {
+    appearance: none; border: 0; cursor: pointer;
+    font: inherit; font-weight: 500; font-size: 14px;
+    padding: 12px 24px; border-radius: 12px;
+    background: var(--accent); color: #FFFEFB;
+    transition: background 160ms ease, box-shadow 160ms ease, transform 100ms ease;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn:hover { background: var(--accent-deep); box-shadow: 0 4px 12px rgba(201,123,92,0.22); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn .spin {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #FFFEFB;
+    border-radius: 999px;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Tasks section */
+  .tasks-section { margin-top: 48px; }
+  .tasks-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+  }
+  .tasks-head h2 {
+    margin: 0; font-size: 20px; font-weight: 600;
+    letter-spacing: -0.01em; color: var(--text);
+  }
+  .filters {
+    display: flex; align-items: center; gap: 4px;
+    background: transparent;
+  }
+  .pill {
+    appearance: none; border: 0; cursor: pointer;
+    font: inherit; font-size: 14px; font-weight: 500;
+    padding: 8px 16px; border-radius: 999px;
+    background: transparent; color: var(--muted);
+    transition: background 160ms ease, color 160ms ease;
+  }
+  .pill:hover { color: var(--text); background: rgba(0,0,0,0.025); }
+  .pill.active { background: var(--accent); color: #FFFEFB; }
+  .pill.active:hover { background: var(--accent-deep); }
+  .pill .count { opacity: 0.7; margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+  .tasks-list { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+
+  .task {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease, opacity 240ms ease;
+  }
+  .task:hover {
+    transform: translateY(-2px);
+    border-color: #D9D1C2;
+    box-shadow: var(--shadow-card-hover);
+  }
+  .task.entering {
+    animation: rise 320ms cubic-bezier(.2,.7,.2,1);
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .dot {
+    width: 10px; height: 10px; border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .dot.high { background: var(--hi); }
+  .dot.med  { background: var(--med); }
+  .dot.low  { background: var(--lo); }
+
+  .task-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .task-title {
+    font-size: 16px; font-weight: 500; color: var(--text);
+    line-height: 1.35;
+    transition: color 200ms ease, text-decoration-color 200ms ease;
+  }
+  .task-meta {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 14px; color: var(--muted);
+  }
+  .task-meta svg { flex-shrink: 0; }
+
+  .check {
+    appearance: none; border: 0; cursor: pointer; padding: 0;
+    width: 24px; height: 24px; border-radius: 999px;
+    background: transparent;
+    border: 1.5px solid var(--muted);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    transition: background 160ms ease, border-color 160ms ease, transform 120ms ease;
+  }
+  .check:hover { border-color: var(--text); }
+  .check svg { opacity: 0; transition: opacity 160ms ease; color: #FFFEFB; }
+
+  .task.done .check {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .task.done .check svg { opacity: 1; }
+  .task.done .task-title {
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: rgba(138,130,120,0.5);
+    text-decoration-thickness: 1.5px;
+  }
+  .task.done .task-meta { color: #B0A89A; }
+
+  /* Empty state */
+  .empty {
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--muted);
+  }
+  .empty svg { margin-bottom: 24px; }
+  .empty h3 {
+    margin: 0; font-size: 18px; font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .empty p { margin: 8px 0 0; font-size: 15px; color: var(--muted); }
+
+  /* FAB */
+  .fab {
+    position: fixed; right: 24px; bottom: 24px; z-index: 40;
+    appearance: none; border: 0; cursor: pointer;
+    background: var(--accent); color: #FFFEFB;
+    font: inherit; font-size: 14px; font-weight: 500;
+    padding: 14px 24px; border-radius: 999px;
+    box-shadow: var(--shadow-fab);
+    display: inline-flex; align-items: center; gap: 10px;
+    transition: background 200ms ease, box-shadow 200ms ease, transform 160ms ease;
+  }
+  .fab:hover { background: var(--accent-deep); box-shadow: var(--shadow-fab-hover); transform: translateY(-1px); }
+  .fab:active { transform: translateY(0); }
+  .fab .fab-label { white-space: nowrap; }
+  .fab .spark {
+    width: 18px; height: 18px;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+
+  /* Coach overlay */
+  .coach-backdrop {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(58,53,48,0.32);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: grid; place-items: center;
+    padding: 24px;
+    animation: fade 200ms ease;
+  }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .coach {
+    width: 100%; max-width: 520px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    box-shadow: 0 30px 80px rgba(58,53,48,0.20);
+    animation: rise 280ms cubic-bezier(.2,.7,.2,1);
+  }
+  .coach-eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .coach h3 {
+    margin: 8px 0 4px; font-size: 22px; font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .coach-sub { margin: 0 0 24px; color: var(--muted); font-size: 15px; }
+  .coach-list { display: flex; flex-direction: column; gap: 12px; }
+  .coach-item {
+    display: flex; gap: 16px; align-items: flex-start;
+    padding: 16px; border-radius: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .coach-rank {
+    width: 28px; height: 28px; border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: grid; place-items: center;
+    font-size: 13px; font-weight: 600; color: var(--text);
+    flex-shrink: 0;
+  }
+  .coach-item-body { flex: 1; min-width: 0; }
+  .coach-item-title { font-size: 15px; font-weight: 500; color: var(--text); }
+  .coach-item-why { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .coach-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+  .btn-ghost {
+    appearance: none; border: 0; cursor: pointer; font: inherit;
+    padding: 12px 20px; border-radius: 12px;
+    background: transparent; color: var(--muted); font-weight: 500; font-size: 14px;
+  }
+  .btn-ghost:hover { color: var(--text); background: rgba(0,0,0,0.03); }
+
+  /* Untangling banner */
+  .untangling {
+    margin-top: 16px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    color: var(--muted); font-size: 14px;
+    animation: rise 240ms cubic-bezier(.2,.7,.2,1);
+  }
+  .untangling .spin {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 999px;
+    animation: spin 700ms linear infinite;
+  }
+
+  /* Mobile */
+  @media (max-width: 640px) {
+    .topbar-inner { padding: 14px 20px; }
+    .page { padding: 0 20px 160px; }
+    .hero { padding: 40px 0 24px; }
+    .hero h1 { font-size: 32px; }
+    .hero p { font-size: 16px; }
+    .dump { padding: 16px; font-size: 15px; }
+    .tasks-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .filters { width: 100%; }
+    .fab .fab-label { display: none; }
+    .fab { padding: 14px; }
+    .fab .spark { width: 22px; height: 22px; }
+  }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const Icon = {
+      Knot: (p) => (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...p}>
+          <path d="M5 9c3 0 3 6 7 6s4-6 7-6" />
+          <path d="M5 15c3 0 3-6 7-6s4 6 7 6" />
+        </svg>
+      ),
+      Clock: (p) => (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      ),
+      Check: (p) => (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" {...p}>
+          <path d="M5 12.5l4.5 4.5L19 7" />
+        </svg>
+      ),
+      Spark: (p) => (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+          <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
+        </svg>
+      ),
+      Tangle: (p) => (
+        <svg width="160" height="80" viewBox="0 0 200 80" fill="none" stroke="currentColor"
+          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...p}>
+          <path d="M10 40 C 18 20, 38 20, 36 40 S 18 60, 30 50 S 56 22, 50 42 S 30 64, 56 50 S 86 30, 78 46 S 60 60, 92 48"
+            opacity="0.8" />
+          <path d="M92 48 C 110 44, 130 42, 150 41" opacity="0.55" />
+          <path d="M150 41 L 192 40" />
+        </svg>
+      ),
+    };
+
+    const SEED_TASKS = [
+      { id: 't1', title: "Text Slava about the video", priority: "high", deadline: "Tomorrow, before 12 PM", done: false },
+      { id: 't2', title: "Finalize Q2 marketing plan", priority: "med",  deadline: "Friday, 5 PM", done: false },
+      { id: 't3', title: "Buy birthday gift for mom",   priority: "low",  deadline: null, done: false },
+    ];
+
+    function parseDump(text) {
+      if (!text || !text.trim()) return [];
+      const chunks = text
+        .replace(/\n+/g, ". ")
+        .split(/(?:\.\s+|;\s+|\bAlso\b\s+|\band\s+(?=need|finalize|buy|text|send|book|call|email|finish|review|prep)|,\s+(?=need|finalize|buy|text|send|book|call|email|finish|review|prep))/i)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 3);
+
+      const now = Date.now();
+      return chunks.slice(0, 6).map((raw, i) => {
+        const lower = raw.toLowerCase();
+        let priority = "med";
+        if (/\burgent|asap|today|now|critical\b/.test(lower)) priority = "high";
+        else if (/\bsomeday|maybe|eventually|whenever|low[- ]?prio\b/.test(lower)) priority = "low";
+        else if (/\bbuy|gift|pick up|order\b/.test(lower)) priority = "low";
+        else if (/\bfriday|monday|tuesday|wednesday|thursday|next week|by\b/.test(lower)) priority = "med";
+        else if (/\btomorrow|before lunch|before \d|by \d|tonight\b/.test(lower)) priority = "high";
+
+        let deadline = null;
+        if (/tomorrow/i.test(raw)) {
+          const m = raw.match(/before\s+(\d{1,2})\s*(am|pm)?/i);
+          deadline = m ? `Tomorrow, before ${m[1]}${m[2] ? ` ${m[2].toUpperCase()}` : " PM"}` : "Tomorrow";
+        } else if (/friday/i.test(raw))   deadline = "Friday";
+        else if (/monday/i.test(raw))   deadline = "Monday";
+        else if (/tuesday/i.test(raw))  deadline = "Tuesday";
+        else if (/wednesday/i.test(raw))deadline = "Wednesday";
+        else if (/thursday/i.test(raw)) deadline = "Thursday";
+        else if (/today|tonight/i.test(raw)) deadline = "Today";
+        else if (/next week/i.test(raw))     deadline = "Next week";
+
+        const title = raw
+          .replace(/^(also|and|then|i need to|need to|i should|gotta|please|remember to)\s+/i, "")
+          .replace(/[,.;]$/, "")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        return {
+          id: `p${now}-${i}`,
+          title: title.charAt(0).toUpperCase() + title.slice(1),
+          priority,
+          deadline,
+          done: false,
+          isNew: true,
+        };
+      });
+    }
+
+    function TopBar() {
+      return (
+        <div className="topbar">
+          <div className="topbar-inner">
+            <div className="brand">
+              <Icon.Knot style={{ color: "var(--accent)" }} />
+              <span>untangle</span>
+            </div>
+            <div className="avatar" title="You">M</div>
+          </div>
+        </div>
+      );
+    }
+
+    function Hero() {
+      return (
+        <section className="hero">
+          <h1>What's on your mind?</h1>
+          <p>Drop your thoughts. We'll sort them.</p>
+        </section>
+      );
+    }
+
+    function BrainDump({ onUntangle, busy }) {
+      const [text, setText] = useState("");
+
+      function submit() {
+        if (!text.trim() || busy) return;
+        onUntangle(text);
+        setText("");
+      }
+
+      function onKeyDown(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit();
+      }
+
+      return (
+        <div className="dump-wrap">
+          <textarea
+            className="dump"
+            placeholder="Tomorrow text Slava about the video before lunch, urgent. Also need to finalize Q2 plan by Friday. And buy birthday gift for mom."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKeyDown}
+            rows={4}
+          />
+          <div className="dump-actions">
+            <span className="dump-hint">⌘ + Enter to untangle</span>
+            <button className="btn" onClick={submit} disabled={busy || !text.trim()}>
+              {busy ? <><span className="spin" />Untangling…</> : <>Untangle</>}
+            </button>
+          </div>
+          {busy && (
+            <div className="untangling">
+              <span className="spin" />
+              <span>Reading your thoughts, finding the threads…</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function TaskRow({ task, onToggle }) {
+      const cls = `task ${task.done ? "done" : ""} ${task.isNew ? "entering" : ""}`;
+      const dotCls = task.priority === "high" ? "high" : task.priority === "med" ? "med" : "low";
+      return (
+        <div className={cls}>
+          <span className={`dot ${dotCls}`} aria-label={`${task.priority} priority`} />
+          <div className="task-body">
+            <div className="task-title">{task.title}</div>
+            {task.deadline ? (
+              <div className="task-meta">
+                <Icon.Clock />
+                <span>{task.deadline}</span>
+              </div>
+            ) : (
+              <div className="task-meta" style={{ opacity: 0.7 }}>No deadline</div>
+            )}
+          </div>
+          <button
+            className="check"
+            aria-label={task.done ? "Mark as not done" : "Mark as done"}
+            onClick={() => onToggle(task.id)}
+          >
+            <Icon.Check />
+          </button>
+        </div>
+      );
+    }
+
+    function Empty() {
+      return (
+        <div className="empty">
+          <Icon.Tangle style={{ color: "var(--muted)" }} />
+          <h3>Nothing on your mind yet</h3>
+          <p>Drop your first thought above.</p>
+        </div>
+      );
+    }
+
+    function Filters({ value, onChange, counts }) {
+      const items = [
+        { id: "all",    label: "All",    count: counts.all },
+        { id: "active", label: "Active", count: counts.active },
+        { id: "done",   label: "Done",   count: counts.done },
+      ];
+      return (
+        <div className="filters" role="tablist">
+          {items.map((it, i) => (
+            <React.Fragment key={it.id}>
+              <button
+                className={`pill ${value === it.id ? "active" : ""}`}
+                onClick={() => onChange(it.id)}
+                role="tab"
+                aria-selected={value === it.id}
+              >
+                {it.label}
+                <span className="count">{it.count}</span>
+              </button>
+              {i < items.length - 1 && (
+                <span style={{ color: "var(--muted)", opacity: 0.5, fontSize: 14 }}>·</span>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      );
+    }
+
+    function Coach({ tasks, onClose, onPick }) {
+      const top = useMemo(() => {
+        const pri = { high: 3, med: 2, low: 1 };
+        const urg = (t) => {
+          if (!t.deadline) return 0;
+          if (/tomorrow|today|tonight|before/i.test(t.deadline)) return 2;
+          if (/friday|monday|tuesday|wednesday|thursday/i.test(t.deadline)) return 1;
+          return 0;
+        };
+        return [...tasks]
+          .filter((t) => !t.done)
+          .sort((a, b) => (pri[b.priority] + urg(b)) - (pri[a.priority] + urg(a)))
+          .slice(0, 3)
+          .map((t, i) => ({
+            ...t,
+            why: i === 0
+              ? "Time-sensitive and a quick win — knock it out first."
+              : i === 1
+                ? "High-priority, but needs focus. Block 45 minutes."
+                : "Lighter lift. Pair it with a coffee.",
+          }));
+      }, [tasks]);
+
+      useEffect(() => {
+        function onKey(e) { if (e.key === "Escape") onClose(); }
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+      }, [onClose]);
+
+      return (
+        <div className="coach-backdrop" onClick={onClose}>
+          <div className="coach" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="coach-eyebrow">Next 2 hours</div>
+            <h3>Here's what I'd do.</h3>
+            <p className="coach-sub">Three small moves. You don't have to do them all.</p>
+            {top.length === 0 ? (
+              <div style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                Your list is empty — nothing to coach on yet.
+              </div>
+            ) : (
+              <div className="coach-list">
+                {top.map((t, i) => (
+                  <div className="coach-item" key={t.id}>
+                    <div className="coach-rank">{i + 1}</div>
+                    <div className="coach-item-body">
+                      <div className="coach-item-title">{t.title}</div>
+                      <div className="coach-item-why">{t.why}</div>
+                    </div>
+                    <button
+                      className="check"
+                      aria-label="Mark as done"
+                      onClick={() => onPick(t.id)}
+                    >
+                      <Icon.Check />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="coach-actions">
+              <button className="btn-ghost" onClick={onClose}>Maybe later</button>
+              <button className="btn" onClick={onClose}>Sounds good</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function FAB({ onClick }) {
+      return (
+        <button className="fab" onClick={onClick} aria-label="What should I do now?">
+          <span className="spark"><Icon.Spark /></span>
+          <span className="fab-label">What should I do now?</span>
+        </button>
+      );
+    }
+
+    function App() {
+      const [tasks, setTasks] = useState(SEED_TASKS);
+      const [filter, setFilter] = useState("all");
+      const [busy, setBusy] = useState(false);
+      const [coachOpen, setCoachOpen] = useState(false);
+
+      useEffect(() => {
+        if (tasks.some((t) => t.isNew)) {
+          const id = setTimeout(() => {
+            setTasks((cur) => cur.map((t) => ({ ...t, isNew: false })));
+          }, 500);
+          return () => clearTimeout(id);
+        }
+      }, [tasks]);
+
+      const counts = useMemo(() => ({
+        all: tasks.length,
+        active: tasks.filter((t) => !t.done).length,
+        done: tasks.filter((t) => t.done).length,
+      }), [tasks]);
+
+      const filtered = useMemo(() => {
+        if (filter === "active") return tasks.filter((t) => !t.done);
+        if (filter === "done") return tasks.filter((t) => t.done);
+        return tasks;
+      }, [tasks, filter]);
+
+      function untangle(text) {
+        setBusy(true);
+        setTimeout(() => {
+          const parsed = parseDump(text);
+          setTasks((cur) => [...parsed, ...cur]);
+          setBusy(false);
+        }, 1100);
+      }
+
+      function toggle(id) {
+        setTasks((cur) => cur.map((t) => t.id === id ? { ...t, done: !t.done } : t));
+      }
+
+      return (
+        <>
+          <TopBar />
+          <main className="page">
+            <Hero />
+            <BrainDump onUntangle={untangle} busy={busy} />
+
+            <section className="tasks-section">
+              <div className="tasks-head">
+                <h2>Your tasks</h2>
+                <Filters value={filter} onChange={setFilter} counts={counts} />
+              </div>
+
+              {filtered.length === 0 ? (
+                <Empty />
+              ) : (
+                <div className="tasks-list">
+                  {filtered.map((task) => (
+                    <TaskRow key={task.id} task={task} onToggle={toggle} />
+                  ))}
+                </div>
+              )}
+            </section>
+          </main>
+
+          <FAB onClick={() => setCoachOpen(true)} />
+          {coachOpen && (
+            <Coach
+              tasks={tasks}
+              onClose={() => setCoachOpen(false)}
+              onPick={(id) => { toggle(id); }}
+            />
+          )}
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
