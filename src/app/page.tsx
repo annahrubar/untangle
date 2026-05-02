@@ -266,7 +266,11 @@ export default function Home() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") untangle();
+              if (e.isComposing) return;
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                untangle();
+              }
             }}
             rows={4}
             disabled={busy}
