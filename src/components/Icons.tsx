@@ -165,9 +165,10 @@ export function NoteIcon(props: SVGProps<SVGSVGElement>) {
       strokeLinejoin="round"
       {...props}
     >
-      <path d="M21 12a9 9 0 1 1-3.5-7.1" />
-      <path d="M8 11h6" />
-      <path d="M8 14h4" />
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <polyline points="14 3 14 9 20 9" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
     </svg>
   );
 }
