@@ -152,6 +152,26 @@ export function FlagIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function NoteIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M21 12a9 9 0 1 1-3.5-7.1" />
+      <path d="M8 11h6" />
+      <path d="M8 14h4" />
+    </svg>
+  );
+}
+
 export function SunriseIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg

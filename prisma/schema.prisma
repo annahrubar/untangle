@@ -16,6 +16,7 @@ model Task {
   title     String
   priority  String    // "high" | "medium" | "low"
   tag       String?   // "work" | "personal" | "learning" | null
+  notes     String?   // free-form note from the user
   deadline  DateTime?
   done      Boolean   @default(false)
   parentId  String?

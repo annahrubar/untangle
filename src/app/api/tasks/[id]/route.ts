@@ -8,9 +8,20 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const data: { done?: boolean; title?: string; deadline?: Date | null } = {};
+    const data: {
+      done?: boolean;
+      title?: string;
+      notes?: string | null;
+      deadline?: Date | null;
+    } = {};
     if (typeof body.done === "boolean") data.done = body.done;
     if (typeof body.title === "string") data.title = body.title;
+    if ("notes" in body) {
+      data.notes =
+        typeof body.notes === "string" && body.notes.trim()
+          ? body.notes.trim()
+          : null;
+    }
     if ("deadline" in body) {
       if (body.deadline === null) {
         data.deadline = null;

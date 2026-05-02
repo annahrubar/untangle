@@ -11,6 +11,7 @@ import {
   FlagIcon,
   HistoryIcon,
   SunriseIcon,
+  NoteIcon,
 } from "@/components/Icons";
 import type { Task, ParsedTask, Priority, Tag, RecommendItem } from "@/lib/types";
 
@@ -74,7 +75,31 @@ export default function Home() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [deadlineEditingId, setDeadlineEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const quickDeadlineRef = useRef<HTMLInputElement>(null);
+
+  function saveNotes(id: string, notes: string) {
+    const value = notes.trim();
+    fetch(`/api/tasks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: value || null }),
+    })
+      .then(() => {
+        setTasks((cur) =>
+          cur.map((t) => {
+            if (t.id === id) return { ...t, notes: value || null };
+            return {
+              ...t,
+              subtasks: t.subtasks?.map((s) =>
+                s.id === id ? { ...s, notes: value || null } : s
+              ),
+            };
+          })
+        );
+      })
+      .catch(() => {});
+  }
 
   function openQuickDeadline() {
     const el = quickDeadlineRef.current;
@@ -747,12 +772,32 @@ export default function Home() {
                   deadlineEditingId={deadlineEditingId}
                   setDeadlineEditingId={setDeadlineEditingId}
                   saveDeadline={saveDeadline}
+                  expandedId={expandedId}
+                  setExpandedId={setExpandedId}
+                  saveNotes={saveNotes}
                 />
               ))}
             </div>
           )}
         </section>
       </main>
+
+      {/* Note modal */}
+      {expandedId && (() => {
+        const flat = tasks.flatMap((t) => [t, ...(t.subtasks ?? [])]);
+        const task = flat.find((t) => t.id === expandedId);
+        if (!task) return null;
+        return (
+          <NoteModal
+            task={task}
+            onSave={(notes) => {
+              saveNotes(task.id, notes);
+              setExpandedId(null);
+            }}
+            onClose={() => setExpandedId(null)}
+          />
+        );
+      })()}
 
       {/* Toast */}
       {toast && (
@@ -846,6 +891,9 @@ type RowSharedProps = {
   deadlineEditingId: string | null;
   setDeadlineEditingId: (id: string | null) => void;
   saveDeadline: (id: string, isoDate: string) => void;
+  expandedId: string | null;
+  setExpandedId: (id: string | null) => void;
+  saveNotes: (id: string, notes: string) => void;
 };
 
 function TaskRowGroup({
@@ -876,6 +924,9 @@ function TaskRow({
   deadlineEditingId,
   setDeadlineEditingId,
   saveDeadline,
+  expandedId,
+  setExpandedId,
+  saveNotes,
 }: { task: Task; isSubtask?: boolean } & RowSharedProps) {
   const dotCls = task.priority as Priority;
   const isOverdue =
@@ -884,7 +935,9 @@ function TaskRow({
     new Date(task.deadline).getTime() < new Date().setHours(0, 0, 0, 0);
   const isEditing = editingId === task.id;
   const isEditingDeadline = deadlineEditingId === task.id;
-  const cls = `task ${task.done ? "done" : ""} ${isSubtask ? "subtask" : ""} ${isOverdue ? "overdue" : ""}`;
+  const isExpanded = expandedId === task.id;
+  const hasNote = !!(task.notes && task.notes.trim());
+  const cls = `task ${task.done ? "done" : ""} ${isSubtask ? "subtask" : ""} ${isOverdue ? "overdue" : ""} ${isExpanded ? "expanded" : ""}`;
   const deadline = formatDeadline(task.deadline);
   return (
     <div className={cls}>
@@ -948,7 +1001,24 @@ function TaskRow({
           </button>
         )}
         </div>
+        {hasNote && (
+          <button
+            className="task-note-preview"
+            onClick={() => setExpandedId(task.id)}
+            title="Open full note"
+          >
+            <NoteIcon />
+            <span>{(task.notes ?? "").slice(0, 60)}{(task.notes ?? "").length > 60 ? "…" : ""}</span>
+          </button>
+        )}
       </div>
+      <button
+        className={`task-note-btn ${hasNote ? "has-note" : ""}`}
+        aria-label={hasNote ? "View note" : "Add note"}
+        onClick={() => setExpandedId(task.id)}
+      >
+        <NoteIcon />
+      </button>
       <button
         className="task-delete"
         aria-label="Delete"
@@ -963,6 +1033,73 @@ function TaskRow({
       >
         <CheckIcon />
       </button>
+    </div>
+  );
+}
+
+function NoteModal({
+  task,
+  onSave,
+  onClose,
+}: {
+  task: Task;
+  onSave: (notes: string) => void;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState(task.notes ?? "");
+  const deadline = formatDeadline(task.deadline);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="note-backdrop"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="note-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="note-modal-header">
+          <span className={`dot ${task.priority}`} aria-label="priority" />
+          <h3 className="note-modal-title">{task.title}</h3>
+        </div>
+        <div className="note-modal-meta">
+          {task.tag && (
+            <span className={`tag-pill tag-${task.tag}`}>
+              <span className="tag-dot" />
+              {task.tag}
+            </span>
+          )}
+          {deadline && (
+            <span className="note-modal-meta-pill">
+              <ClockIcon />
+              {deadline}
+            </span>
+          )}
+        </div>
+        <textarea
+          autoFocus
+          className="note-modal-textarea"
+          placeholder="Add a note for this task…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={6}
+        />
+        <div className="note-modal-actions">
+          <button className="btn-ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn" onClick={() => onSave(text)}>
+            Save
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

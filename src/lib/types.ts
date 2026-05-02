@@ -15,6 +15,7 @@ export type Task = {
   title: string;
   priority: Priority;
   tag: Tag | null;
+  notes: string | null;
   deadline: string | null; // ISO datetime
   done: boolean;
   parentId: string | null;
