@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { openai, MODEL } from "@/lib/openai";
+import { getOpenAI, MODEL } from "@/lib/openai";
 import type { RecommendItem } from "@/lib/types";
 
 const SYSTEM_PROMPT = `You are a calm, supportive coach helping someone choose what to do in the next 2 hours.
@@ -54,7 +54,7 @@ export async function POST() {
       deadline: t.deadline ? t.deadline.toISOString().slice(0, 10) : null,
     }));
 
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },

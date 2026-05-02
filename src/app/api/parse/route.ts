@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { openai, MODEL } from "@/lib/openai";
+import { getOpenAI, MODEL } from "@/lib/openai";
 import type { ParsedTask } from "@/lib/types";
 
 const SYSTEM_PROMPT = `You are an assistant that parses casual brain-dump text into structured tasks.
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
     }
 
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
